@@ -1,0 +1,21 @@
+services:
+  # QuickHost Frontend Dashboard
+  quickhost:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: quickhost-dashboard
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount Docker socket to manage containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persist container data
+      - quickhost-data:/data/quickhost
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/data/quickhost
+
+volumes:
+  quickhost-data:
