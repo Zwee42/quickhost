@@ -1,26 +1,48 @@
 #!/bin/bash
 
-echo "Starting Next.js with PM2..."
-pm2 start npm --name nextjs -- start
+set -e
 
-while true; do
-    git fetch origin main
+echo "Starting QuickHost services with Supervisor..."
 
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
+# Check if this is the backend service
+if [ "$BACKEND_MODE" = "true" ] || [ -z "$FRONTEND_MODE" ]; then
+    echo "Starting backend application..."
+    cd /app
+    
+    # Start auto-deployment update check
+    {
+        while true; do
+            git fetch origin main 2>/dev/null || true
 
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Changes detected! Pulling…"
-        git pull origin main
+            LOCAL=$(git rev-parse HEAD 2>/dev/null || echo "")
+            REMOTE=$(git rev-parse origin/main 2>/dev/null || echo "")
 
-        echo "Rebuilding application..."
-        npm install --production=false
-        npm run build
+            if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
+                echo "Changes detected! Pulling…"
+                git pull origin main
 
-        echo "Reloading PM2 with zero downtime..."
-        pm2 reload nextjs
-    fi
+                echo "Rebuilding application..."
+                npm install --production=false
+                npm run build
 
-    sleep 60
-done
+                echo "Reloading PM2 with zero downtime..."
+                pm2 reload backend || npm run start &
+            fi
+
+            sleep 60
+        done
+    } &
+fi
+
+# Check if this is the frontend service
+if [ "$FRONTEND_MODE" = "true" ]; then
+    echo "Starting frontend application..."
+    cd /frontend
+    exec npm start
+fi
+
+# Default: start supervisord to manage all services
+exec /usr/bin/supervisord -c /etc/supervisord.conf
+#!/bin/bash
+
 
