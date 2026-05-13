@@ -1,81 +1,62 @@
-# ============ Stage 1: Build Frontend ============
-FROM node:20-alpine AS frontend-builder
+# QuickHost Application Dockerfile
+# Multi-stage build for optimized production image
 
-WORKDIR /frontend
+# ============ Stage 1: Build ============
+FROM node:20-alpine AS builder
 
-# Copy frontend files
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++ git
+
+# Copy frontend package files
 COPY frontend/package*.json ./
-RUN npm ci --only=production
 
+# Install all dependencies (including dev)
+RUN npm ci
+
+# Copy frontend source
 COPY frontend .
 
-# Build frontend
+# Build Next.js application
 RUN npm run build
 
-# ============ Stage 2: Build Backend ============
-FROM node:20-alpine AS backend-builder
-
-# Install dependencies
-RUN apk add --no-cache bash git openssh
-
-# Add deploy key
-ADD id_deploy /root/.ssh/id_rsa
-RUN chmod 600 /root/.ssh/id_rsa
-RUN touch /root/.ssh/known_hosts && ssh-keyscan github.com >> /root/.ssh/known_hosts
-
-# Clone your repo
-RUN git clone git@github.com:%user%/%repo%.git /app
-
-WORKDIR /app
-
-# Install deps + build
-RUN npm install
-RUN npm run build
-
-# Install PM2 globally
-RUN npm install -g pm2
-
-# ============ Stage 3: Runtime ============
+# ============ Stage 2: Runtime ============
 FROM node:20-alpine
 
-# Install nginx and other dependencies
-RUN apk add --no-cache bash nginx supervisor
-
-# Create nginx and www-data user
-RUN addgroup -S nginx && adduser -S nginx -G nginx || true
-
-# Create directory for supervisor
-RUN mkdir -p /var/log/supervisor
-
-# Copy backend from builder
-COPY --from=backend-builder /app /app
-COPY --from=backend-builder /usr/local/lib/node_modules/pm2 /usr/local/lib/node_modules/pm2
-
-# Link PM2 globally
-RUN ln -sf /usr/local/lib/node_modules/pm2/bin/pm2 /usr/local/bin/pm2
-
-# Copy frontend build
-COPY --from=frontend-builder /frontend/.next /frontend/.next
-COPY --from=frontend-builder /frontend/node_modules /frontend/node_modules
-COPY --from=frontend-builder /frontend/package.json /frontend/package.json
-COPY --from=frontend-builder /frontend/public /frontend/public
-COPY --from=frontend-builder /frontend/next.config.js /frontend/next.config.js
-
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/http.d/default.conf
-
-# Copy entrypoint and supervisor config
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-COPY supervisord.conf /etc/supervisord.conf
-
-# Create directories
-RUN mkdir -p /app && mkdir -p /frontend && \
-    chown -R nginx:nginx /app /frontend /var/log/nginx
-
 WORKDIR /app
 
-EXPOSE 80
-CMD ["/bin/bash", "/entrypoint.sh"]
+# Install runtime dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git \
+    openssh-client \
+    docker-cli \
+    && rm -rf /var/cache/apk/*
 
+# Create non-root user
+RUN addgroup -g 1000 -S appuser && adduser -u 1000 -S appuser -G appuser
+
+# Copy built application from builder
+COPY --from=builder --chown=appuser:appuser /app/.next ./.next
+COPY --from=builder --chown=appuser:appuser /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appuser /app/package*.json ./
+COPY --from=builder --chown=appuser:appuser /app/public ./public
+COPY --from=builder --chown=appuser:appuser /app/next.config.js ./
+
+# Create data directory
+RUN mkdir -p /data && chown -R appuser:appuser /data
+
+# Use non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Expose port
+EXPOSE 3000
+
+# Start Next.js server
+CMD ["npm", "start"]

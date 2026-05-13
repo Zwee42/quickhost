@@ -1,68 +1,119 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import Link from 'next/link';
 import Layout from '../components/Layout';
-import DeploymentForm from '../components/DeploymentForm';
-import DeploymentList from '../components/DeploymentList';
-
-interface Deployment {
-  id: string;
-  name: string;
-  status: 'running' | 'stopped' | 'error';
-  url: string;
-  port: number;
-  lastUpdated: string;
-}
 
 export default function Home() {
-  const [deployments, setDeployments] = useState<Deployment[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Fetch deployments from API
-    const fetchDeployments = async () => {
-      try {
-        const response = await fetch('/api/deployments');
-        if (response.ok) {
-          const data = await response.json();
-          setDeployments(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch deployments:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDeployments();
-  }, []);
-
-  const handleDeploy = async (config: any) => {
-    try {
-      const response = await fetch('/api/deployments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
-      });
-      if (response.ok) {
-        const newDeployment = await response.json();
-        setDeployments([...deployments, newDeployment]);
-      }
-    } catch (error) {
-      console.error('Deployment failed:', error);
-    }
-  };
-
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold mb-8">QuickHost</h1>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1">
-            <DeploymentForm onDeploy={handleDeploy} />
-          </div>
-          
-          <div className="lg:col-span-2">
-            <DeploymentList deployments={deployments} loading={loading} />
+      <div className="container mx-auto px-4 py-16">
+        {/* Hero Section */}
+        <div className="max-w-3xl mx-auto text-center mb-16">
+          <h1 className="text-5xl md:text-6xl font-bold mb-4">
+            Self-Hosted Web Platform
+          </h1>
+          <p className="text-xl text-slate-400 mb-8">
+            Deploy multiple projects instantly. Git URL → Dockerfile → Live website.
+            <br />
+            Zero manual intervention required.
+          </p>
+
+          <Link
+            href="/projects"
+            className="inline-block px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition transform hover:scale-105"
+          >
+            Get Started →
+          </Link>
+        </div>
+
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto mb-16">
+          {[
+            {
+              icon: '🚀',
+              title: 'Instant Deployment',
+              description: 'Deploy from any Git repository with a Dockerfile in seconds',
+            },
+            {
+              icon: '🌐',
+              title: 'Auto DNS Routing',
+              description: 'Automatic NGINX configuration and subdomain routing',
+            },
+            {
+              icon: '🔒',
+              title: 'SSL Certificates',
+              description: 'Automatic Let\'s Encrypt HTTPS for all projects',
+            },
+            {
+              icon: '🐳',
+              title: 'Docker Isolation',
+              description: 'Each project runs in isolated Docker containers',
+            },
+            {
+              icon: '📊',
+              title: 'Live Monitoring',
+              description: 'Real-time logs and container status tracking',
+            },
+            {
+              icon: '⚙️',
+              title: 'Environment Variables',
+              description: 'Easy configuration management per project',
+            },
+          ].map((feature, idx) => (
+            <div key={idx} className="bg-slate-800 rounded-lg p-6 border border-slate-700 hover:border-slate-600 transition">
+              <div className="text-3xl mb-3">{feature.icon}</div>
+              <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+              <p className="text-slate-400 text-sm">{feature.description}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* How It Works */}
+        <div className="max-w-4xl mx-auto bg-slate-800 rounded-lg p-8 border border-slate-700">
+          <h2 className="text-3xl font-bold mb-8 text-center">How It Works</h2>
+
+          <div className="space-y-6">
+            {[
+              {
+                step: '1',
+                title: 'Enter Git URL & Subdomain',
+                description: 'Provide your repository URL and choose a subdomain',
+              },
+              {
+                step: '2',
+                title: 'System Clones & Builds',
+                description: 'Repository is automatically cloned and Docker image is built',
+              },
+              {
+                step: '3',
+                title: 'Container Deployed',
+                description: 'Container starts in isolated Docker network',
+              },
+              {
+                step: '4',
+                title: 'NGINX Configured',
+                description: 'Subdomain automatically routed to your container',
+              },
+              {
+                step: '5',
+                title: 'SSL Enabled',
+                description: 'Let\'s Encrypt certificate automatically issued and renewed',
+              },
+              {
+                step: '6',
+                title: 'Live & Monitored',
+                description: 'Project is now live with real-time logs and status tracking',
+              },
+            ].map((item, idx) => (
+              <div key={idx} className="flex items-start space-x-4">
+                <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center font-bold">
+                  {item.step}
+                </div>
+                <div>
+                  <h4 className="font-semibold mb-1">{item.title}</h4>
+                  <p className="text-slate-400 text-sm">{item.description}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
