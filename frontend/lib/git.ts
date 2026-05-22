@@ -146,4 +146,5 @@ export class GitService {
   }
 }
 
-export default new GitService();
+const gitService = new GitService();
+export default gitService;

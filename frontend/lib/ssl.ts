@@ -192,4 +192,5 @@ export class SSLService {
   }
 }
 
-export default new SSLService();
+const sslService = new SSLService();
+export default sslService;

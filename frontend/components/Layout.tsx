@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 
 interface LayoutProps {
   children: ReactNode;
@@ -22,8 +23,8 @@ export default function Layout({ children }: LayoutProps) {
               <span className="text-xl font-bold">QuickHost</span>
             </div>
             <div className="flex items-center space-x-4">
-              <a href="/" className="hover:text-blue-400 transition">Dashboard</a>
-              <a href="https://github.com" className="hover:text-blue-400 transition">GitHub</a>
+              <Link href="/" className="hover:text-blue-400 transition">Dashboard</Link>
+              <a href="https://github.com" className="hover:text-blue-400 transition" target="_blank" rel="noopener noreferrer">GitHub</a>
             </div>
           </div>
         </nav>

@@ -31,8 +31,8 @@ services:
   # QuickHost main application (Next.js frontend + API backend)
   quickhost-app:
     build:
-      context: ./frontend
-      dockerfile: ../Dockerfile
+      context: .
+      dockerfile: Dockerfile
     container_name: quickhost-app
     restart: unless-stopped
     environment:

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 
@@ -40,7 +40,7 @@ export default function ProjectDetails() {
   const [actionLoading, setActionLoading] = useState(false);
   const [logView, setLogView] = useState<LogView>('app');
 
-  const fetchProject = async () => {
+  const fetchProject = useCallback(async () => {
     if (!id) return;
 
     try {
@@ -56,9 +56,9 @@ export default function ProjectDetails() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     if (!id) return;
 
     try {
@@ -72,19 +72,19 @@ export default function ProjectDetails() {
     } catch (err: any) {
       console.error('Failed to fetch logs:', err);
     }
-  };
+  }, [id, logView]);
 
   useEffect(() => {
     fetchProject();
     const interval = setInterval(fetchProject, 5000);
     return () => clearInterval(interval);
-  }, [id]);
+  }, [fetchProject]);
 
   useEffect(() => {
     fetchLogs();
     const interval = setInterval(fetchLogs, 3000);
     return () => clearInterval(interval);
-  }, [id, logView]);
+  }, [fetchLogs]);
 
   const handleAction = async (action: 'restart' | 'stop') => {
     if (!id) return;

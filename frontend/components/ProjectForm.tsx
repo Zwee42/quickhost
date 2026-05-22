@@ -165,7 +165,7 @@ export default function ProjectForm({ onSuccess }: ProjectFormProps) {
               onChange={handleChange}
               className="w-4 h-4 bg-slate-700 border border-slate-600 rounded"
             />
-            <span>Enable HTTPS with Let's Encrypt</span>
+            <span>Enable HTTPS with Let&apos;s Encrypt</span>
           </label>
           <p className="text-xs text-slate-400 mt-1">Automatic SSL certificates for your domain</p>
         </div>

@@ -216,4 +216,5 @@ server {
   }
 }
 
-export default new NginxService();
+const nginxService = new NginxService();
+export default nginxService;

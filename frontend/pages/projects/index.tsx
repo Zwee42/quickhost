@@ -79,14 +79,14 @@ export default function Projects() {
                 <li className="flex items-start space-x-2">
                   <span className="text-blue-400 mt-1">✓</span>
                   <span>
-                    <strong>HTTPS:</strong> Optional Let's Encrypt SSL certificates for your custom domain
+                    <strong>HTTPS:</strong> Optional Let&apos;s Encrypt SSL certificates for your custom domain
                   </span>
                 </li>
               </ul>
 
               <div className="mt-6 p-4 bg-blue-900 bg-opacity-50 border border-blue-700 rounded">
                 <p className="text-sm text-blue-200">
-                  <strong>Tip:</strong> Environment variables can be passed as JSON. They'll be injected into your Docker container.
+                  <strong>Tip:</strong> Environment variables can be passed as JSON. They&apos;ll be injected into your Docker container.
                 </p>
               </div>
             </div>

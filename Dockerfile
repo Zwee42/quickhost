@@ -36,7 +36,7 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # Create non-root user
-RUN addgroup -g 1000 -S appuser && adduser -u 1000 -S appuser -G appuser
+RUN addgroup -g 1001 -S appuser && adduser -u 1001 -S appuser -G appuser
 
 # Copy built application from builder
 COPY --from=builder --chown=appuser:appuser /app/.next ./.next
