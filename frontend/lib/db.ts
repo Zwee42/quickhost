@@ -72,4 +72,11 @@ export function initializeDatabase() {
   `);
 }
 
+// Initialize on require
+try {
+  initializeDatabase();
+} catch (error) {
+  console.error('Failed to initialize database schema:', error);
+}
+
 export default db;

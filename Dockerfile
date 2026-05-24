@@ -42,7 +42,6 @@ RUN addgroup -g 1001 -S appuser && adduser -u 1001 -S appuser -G appuser
 COPY --from=builder --chown=appuser:appuser /app/.next ./.next
 COPY --from=builder --chown=appuser:appuser /app/node_modules ./node_modules
 COPY --from=builder --chown=appuser:appuser /app/package*.json ./
-COPY --from=builder --chown=appuser:appuser /app/public ./public
 COPY --from=builder --chown=appuser:appuser /app/next.config.js ./
 
 # Create data directory
