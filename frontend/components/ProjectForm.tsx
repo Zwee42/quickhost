@@ -15,7 +15,9 @@ export default function ProjectForm({ onSuccess }: ProjectFormProps) {
     gitBranch: 'main',
     subdomain: '',
     enableSsl: true,
-    environmentVariables: '{}',
+    testMode: false,
+    environmentVariables: '',
+    dockerfilePath: 'Dockerfile',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -37,11 +39,28 @@ export default function ProjectForm({ onSuccess }: ProjectFormProps) {
       // Parse environment variables
       let envVars: Record<string, string> = {};
       if (formData.environmentVariables.trim()) {
-        try {
-          envVars = JSON.parse(formData.environmentVariables);
-        } catch {
-          throw new Error('Invalid JSON in environment variables');
+        const lines = formData.environmentVariables.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          
+          const eqIdx = trimmed.indexOf('=');
+          if (eqIdx === -1) {
+            throw new Error(`Invalid environment variable format: ${trimmed}`);
+          }
+          const key = trimmed.substring(0, eqIdx).trim();
+          const value = trimmed.substring(eqIdx + 1).trim();
+          if (key) {
+            envVars[key] = value;
+          }
         }
+      }
+
+      let finalSubdomain = formData.subdomain;
+      if (formData.testMode && !finalSubdomain) {
+        // Generate a basic subdomain based on the name for internal tracking
+        finalSubdomain = `${formData.name.toLowerCase().replace(/[^a-z0-9-]/g, '')}-test`;
+        if (finalSubdomain.length < 3) finalSubdomain += 'app';
       }
 
       const response = await fetch('/api/projects', {
@@ -51,9 +70,11 @@ export default function ProjectForm({ onSuccess }: ProjectFormProps) {
           name: formData.name,
           gitUrl: formData.gitUrl,
           gitBranch: formData.gitBranch,
-          subdomain: formData.subdomain,
+          subdomain: finalSubdomain,
           enableSsl: formData.enableSsl,
+          testMode: formData.testMode,
           environmentVariables: envVars,
+          dockerfilePath: formData.dockerfilePath,
         }),
       });
 
@@ -69,7 +90,9 @@ export default function ProjectForm({ onSuccess }: ProjectFormProps) {
         gitBranch: 'main',
         subdomain: '',
         enableSsl: true,
-        environmentVariables: '{}',
+        testMode: false,
+        environmentVariables: '',
+        dockerfilePath: 'Dockerfile',
       });
 
       if (onSuccess) {
@@ -125,7 +148,7 @@ export default function ProjectForm({ onSuccess }: ProjectFormProps) {
           <p className="text-xs text-slate-400 mt-1">Supports GitHub, GitLab (HTTPS or SSH)</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={formData.testMode ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
           <div>
             <label htmlFor="project-git-branch" className="block text-sm font-medium mb-2">Branch</label>
             <input
@@ -139,49 +162,82 @@ export default function ProjectForm({ onSuccess }: ProjectFormProps) {
             />
           </div>
 
-          <div>
-            <label htmlFor="project-subdomain" className="block text-sm font-medium mb-2">Subdomain*</label>
-            <input
-              id="project-subdomain"
-              type="text"
-              name="subdomain"
-              value={formData.subdomain}
-              onChange={handleChange}
-              placeholder="my-app"
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
-              required
-            />
-            <p className="text-xs text-slate-400 mt-1">Lowercase alphanumeric and hyphens only</p>
-          </div>
+          {!formData.testMode && (
+            <div>
+              <label htmlFor="project-subdomain" className="block text-sm font-medium mb-2">Subdomain*</label>
+              <input
+                id="project-subdomain"
+                type="text"
+                name="subdomain"
+                value={formData.subdomain}
+                onChange={handleChange}
+                placeholder="my-app"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                required={!formData.testMode}
+              />
+              <p className="text-xs text-slate-400 mt-1">Lowercase alphanumeric and hyphens only</p>
+            </div>
+          )}
         </div>
 
         <div>
-          <label className="flex items-center space-x-2 text-sm font-medium">
+          <label htmlFor="project-dockerfile-path" className="block text-sm font-medium mb-2">Dockerfile Path</label>
+          <input
+            id="project-dockerfile-path"
+            type="text"
+            name="dockerfilePath"
+            value={formData.dockerfilePath}
+            onChange={handleChange}
+            placeholder="Dockerfile"
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+          />
+          <p className="text-xs text-slate-400 mt-1">Path relative to the root of the repository. Example: `path/to/Dockerfile`</p>
+        </div>
+
+        <div>
+          <label className="flex items-center space-x-2 text-sm font-medium mb-4">
             <input
-              id="project-enable-ssl"
+              id="project-test-mode"
               type="checkbox"
-              name="enableSsl"
-              checked={formData.enableSsl}
+              name="testMode"
+              checked={formData.testMode}
               onChange={handleChange}
               className="w-4 h-4 bg-slate-700 border border-slate-600 rounded"
             />
-            <span>Enable HTTPS with Let&apos;s Encrypt</span>
+            <span className="text-blue-300 font-bold">Enable Test Mode (Local Only)</span>
           </label>
-          <p className="text-xs text-slate-400 mt-1">Automatic SSL certificates for your domain</p>
+          <p className="text-xs text-slate-400 mt-1 mb-2">Skips NGINX/SSL configuration and exposes container locally only.</p>
         </div>
 
+        {!formData.testMode && (
+          <div>
+            <label className="flex items-center space-x-2 text-sm font-medium">
+              <input
+                id="project-enable-ssl"
+                type="checkbox"
+                name="enableSsl"
+                checked={formData.enableSsl}
+                onChange={handleChange}
+                className="w-4 h-4 bg-slate-700 border border-slate-600 rounded"
+              />
+              <span>Enable HTTPS with Let&apos;s Encrypt</span>
+            </label>
+            <p className="text-xs text-slate-400 mt-1">Automatic SSL certificates for your domain</p>
+          </div>
+        )}
+
         <div>
-          <label htmlFor="project-environment-variables" className="block text-sm font-medium mb-2">Environment Variables (JSON)</label>
+          <label htmlFor="project-environment-variables" className="block text-sm font-medium mb-2">Environment Variables</label>
           <textarea
             id="project-environment-variables"
             name="environmentVariables"
             value={formData.environmentVariables}
             onChange={handleChange}
-            placeholder='{"DATABASE_URL": "...","API_KEY": "..."}'
+            placeholder="DATABASE_URL=postgres://...&#10;API_KEY=secret"
             className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 font-mono text-xs"
             rows={4}
           />
-          <p className="text-xs text-slate-400 mt-1">Optional: JSON format environment variables</p>
+          <p className="text-xs text-slate-400 mt-1">Optional: KEY=VALUE format, one per line</p>
         </div>
 
         <button

@@ -43,6 +43,45 @@ export default async function handler(
           details: error.message,
         } as ErrorResponse);
       }
+    } else if (req.method === 'PATCH') {
+      const project = projectService.getProjectStatus(projectId);
+
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' } as ErrorResponse);
+      }
+
+      const { port, internalPort } = req.body;
+
+      if (port || internalPort) {
+        let parsedPort: number | undefined;
+        let parsedInternalPort: number | undefined;
+
+        if (port) {
+            parsedPort = parseInt(port, 10);
+            if (isNaN(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
+            return res.status(400).json({ error: 'Invalid port number' } as ErrorResponse);
+            }
+        }
+        
+        if (internalPort) {
+            parsedInternalPort = parseInt(internalPort, 10);
+            if (isNaN(parsedInternalPort) || parsedInternalPort <= 0 || parsedInternalPort > 65535) {
+                return res.status(400).json({ error: 'Invalid internal port number' } as ErrorResponse);
+            }
+        }
+
+        try {
+          await projectService.updateProjectPort(projectId, parsedPort || project.containerPort, parsedInternalPort);
+          res.status(200).json({ message: 'Project port updated successfully' });
+        } catch (error: any) {
+          res.status(400).json({
+            error: 'Failed to update project port',
+            details: error.message,
+          } as ErrorResponse);
+        }
+      } else {
+        res.status(400).json({ error: 'No updatable fields provided (expected port)' } as ErrorResponse);
+      }
     } else {
       res.status(405).json({ error: 'Method not allowed' } as ErrorResponse);
     }

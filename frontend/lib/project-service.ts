@@ -13,6 +13,9 @@ export interface CreateProjectInput {
   enableSsl?: boolean;
   environmentVariables?: Record<string, string>;
   port?: number;
+  internalPort?: number;
+  testMode?: boolean;
+  dockerfilePath?: string;
 }
 
 export interface ProjectStatus {
@@ -23,6 +26,7 @@ export interface ProjectStatus {
   url: string;
   containerName: string;
   containerPort: number;
+  internalPort?: number;
   lastError?: string;
   lastUpdated: string;
 }
@@ -77,6 +81,9 @@ export class ProjectService {
         JSON.stringify({
           enableSsl: input.enableSsl || this.enableSsl,
           environmentVariables: input.environmentVariables || {},
+          testMode: input.testMode || false,
+          dockerfilePath: input.dockerfilePath || 'Dockerfile',
+          internalPort: input.internalPort,
         })
       );
 
@@ -118,9 +125,12 @@ export class ProjectService {
       this.addLog(projectId, 'info', 'Repository cloned successfully');
 
       // 2. Check for Dockerfile
-      if (!gitService.hasDockerfile(projectPath)) {
+      const metadata = JSON.parse(project.metadata || '{}');
+      const dockerfilePath = metadata.dockerfilePath || 'Dockerfile';
+
+      if (!gitService.hasDockerfile(projectPath, dockerfilePath)) {
         throw new Error(
-          'Repository does not contain a Dockerfile. QuickHost requires a Dockerfile in the repository root.'
+          `Repository does not contain a Dockerfile at '${dockerfilePath}'. QuickHost requires a valid Dockerfile path.`
         );
       }
 
@@ -129,14 +139,13 @@ export class ProjectService {
       const imageName = `quickhost:${project.name}`;
 
       try {
-        await dockerService.buildImage(projectPath, imageName);
+        await dockerService.buildImage(projectPath, imageName, dockerfilePath);
         this.addLog(projectId, 'info', 'Docker image built successfully');
       } catch (error: any) {
         throw new Error(`Failed to build Docker image: ${error.message}`);
       }
 
       // 4. Prepare environment variables
-      const metadata = JSON.parse(project.metadata || '{}');
       const env: Record<string, string> = {
         NODE_ENV: 'production',
         ...metadata.environmentVariables,
@@ -147,10 +156,12 @@ export class ProjectService {
 
       await dockerService.ensureNetwork();
 
+      const internalPort = metadata.internalPort || project.containerPort;
+
       const containerId = await dockerService.runContainer({
         name: project.containerName,
         image: imageName,
-        ports: { [project.containerPort]: project.containerPort },
+        ports: { [internalPort]: project.containerPort },
         env,
         networks: ['quickhost-network'],
       });
@@ -159,8 +170,9 @@ export class ProjectService {
 
       // 6. Configure SSL if enabled
       const fullDomain = `${project.subdomain}.${this.domain}`;
+      const testMode = metadata.testMode === true;
 
-      if (metadata.enableSsl && this.domain !== 'localhost') {
+      if (!testMode && metadata.enableSsl && this.domain !== 'localhost') {
         console.log(`[${projectId}] Requesting SSL certificate...`);
 
         try {
@@ -181,38 +193,42 @@ export class ProjectService {
         }
       }
 
-      // 7. Configure NGINX
-      console.log(`[${projectId}] Configuring NGINX...`);
+      if (!testMode) {
+        // 7. Configure NGINX
+        console.log(`[${projectId}] Configuring NGINX...`);
 
-      const certPaths = db
-        .prepare('SELECT certPath, keyPath FROM ssl_certificates WHERE projectId = ?')
-        .get(projectId) as any;
+        const certPaths = db
+          .prepare('SELECT certPath, keyPath FROM ssl_certificates WHERE projectId = ?')
+          .get(projectId) as any;
 
-      await nginxService.writeConfig({
-        serverName: fullDomain,
-        upstreamName: `upstream_${project.subdomain}`,
-        containerPort: project.containerPort,
-        containerName: project.containerName,
-        useSsl: metadata.enableSsl && !!certPaths,
-        certPath: certPaths?.certPath,
-        keyPath: certPaths?.keyPath,
-      });
+        await nginxService.writeConfig({
+          serverName: fullDomain,
+          upstreamName: `upstream_${project.subdomain}`,
+          containerPort: internalPort,
+          containerName: project.containerName,
+          useSsl: metadata.enableSsl && !!certPaths,
+          certPath: certPaths?.certPath,
+          keyPath: certPaths?.keyPath,
+        });
 
-      // 8. Reload NGINX
-      console.log(`[${projectId}] Reloading NGINX...`);
+        // 8. Reload NGINX
+        console.log(`[${projectId}] Reloading NGINX...`);
 
-      try {
-        if (await nginxService.testConfig()) {
-          await nginxService.reloadNginx();
-          this.addLog(projectId, 'info', 'NGINX configured and reloaded');
+        try {
+          if (await nginxService.testConfig()) {
+            await nginxService.reloadNginx();
+            this.addLog(projectId, 'info', 'NGINX configured and reloaded');
+          }
+        } catch (error: any) {
+          // Non-critical error
+          this.addLog(
+            projectId,
+            'warn',
+            `NGINX reload issue: ${error.message}`
+          );
         }
-      } catch (error: any) {
-        // Non-critical error
-        this.addLog(
-          projectId,
-          'warn',
-          `NGINX reload issue: ${error.message}`
-        );
+      } else {
+        this.addLog(projectId, 'info', 'Test mode enabled, skipping NGINX and SSL');
       }
 
       // 9. Mark as running
@@ -266,15 +282,21 @@ export class ProjectService {
     if (!project) return null;
 
     const fullDomain = `${project.subdomain}.${this.domain}`;
+    const metadata = JSON.parse(project.metadata || '{}');
+    const testMode = metadata.testMode === true;
+    const url = testMode ? `http://localhost:${project.containerPort}` : `https://${fullDomain}`;
+    // Add internalPort to the returned status
+    const internalPort = metadata.internalPort || project.containerPort;
 
     return {
       id: project.id,
       name: project.name,
       status: project.status,
       subdomain: project.subdomain,
-      url: `https://${fullDomain}`,
+      url: url,
       containerName: project.containerName,
       containerPort: project.containerPort,
+      internalPort: internalPort, // Return it for the frontend
       lastUpdated: new Date(project.updatedAt * 1000).toISOString(),
     };
   }
@@ -287,14 +309,20 @@ export class ProjectService {
 
     return projects.map((project) => {
       const fullDomain = `${project.subdomain}.${this.domain}`;
+      const metadata = JSON.parse(project.metadata || '{}');
+      const testMode = metadata.testMode === true;
+      const url = testMode ? `http://localhost:${project.containerPort}` : `https://${fullDomain}`;
+      const internalPort = metadata.internalPort || project.containerPort;
+      
       return {
         id: project.id,
         name: project.name,
         status: project.status,
         subdomain: project.subdomain,
-        url: `https://${fullDomain}`,
+        url: url,
         containerName: project.containerName,
         containerPort: project.containerPort,
+        internalPort,
         lastUpdated: new Date(project.updatedAt * 1000).toISOString(),
       };
     });
@@ -465,6 +493,97 @@ export class ProjectService {
 
     // Restart container to apply changes
     await this.restartProject(projectId);
+  }
+
+  /**
+   * Update project port
+   */
+  async updateProjectPort(projectId: string, newPort: number, internalPort?: number): Promise<void> {
+    const project = db
+      .prepare('SELECT * FROM projects WHERE id = ?')
+      .get(projectId) as any;
+
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    // Check if new port is already in use
+    const existing = db
+      .prepare('SELECT id FROM projects WHERE containerPort = ? AND id != ?')
+      .get(newPort, projectId);
+
+    if (existing) {
+      throw new Error(`Port ${newPort} is already in use by another project`);
+    }
+
+    // Update internalPort in metadata
+    const metadata = JSON.parse(project.metadata || '{}');
+    if (internalPort) {
+        metadata.internalPort = internalPort;
+        db.prepare('UPDATE projects SET metadata = ? WHERE id = ?').run(JSON.stringify(metadata), projectId);
+    }
+    const finalInternalPort = internalPort || metadata.internalPort || newPort;
+
+    // Update database
+    db.prepare('UPDATE projects SET containerPort = ? WHERE id = ?').run(newPort, projectId);
+    
+    // Also fetch updated project to have the new port
+    const updatedProject = db
+      .prepare('SELECT * FROM projects WHERE id = ?')
+      .get(projectId) as any;
+
+    try {
+      const exists = await dockerService.containerExists(updatedProject.containerName);
+      if (exists) {
+        // Stop and remove old container
+        await dockerService.stopContainer(updatedProject.containerName);
+        await dockerService.removeContainer(updatedProject.containerName, true);
+        
+        // Re-run container with new ports
+        const env: Record<string, string> = {
+          NODE_ENV: 'production',
+          ...metadata.environmentVariables,
+        };
+
+        const imageName = `quickhost:${updatedProject.name}`;
+        await dockerService.runContainer({
+          name: updatedProject.containerName,
+          image: imageName,
+          ports: { [finalInternalPort]: newPort },
+          env,
+          networks: ['quickhost-network'],
+        });
+
+        // Update NGINX to point to new port
+        const testMode = metadata.testMode === true;
+        if (!testMode) {
+          const fullDomain = `${updatedProject.subdomain}.${this.domain}`;
+          const certPaths = db
+            .prepare('SELECT certPath, keyPath FROM ssl_certificates WHERE projectId = ?')
+            .get(projectId) as any;
+
+          await nginxService.writeConfig({
+            serverName: fullDomain,
+            upstreamName: `upstream_${updatedProject.subdomain}`,
+            containerPort: finalInternalPort,
+            containerName: updatedProject.containerName,
+            useSsl: metadata.enableSsl && !!certPaths,
+            certPath: certPaths?.certPath,
+            keyPath: certPaths?.keyPath,
+          });
+
+          if (await nginxService.testConfig()) {
+            await nginxService.reloadNginx();
+          }
+        }
+      }
+      
+      this.updateProjectStatus(projectId, exists ? 'running' : 'stopped');
+      this.addLog(projectId, 'info', `Project port updated. Host: ${newPort}, Internal: ${finalInternalPort}`);
+    } catch (error: any) {
+      this.updateProjectStatus(projectId, 'error', error.message);
+      throw new Error(`Failed to update project port: ${error.message}`);
+    }
   }
 
   /**

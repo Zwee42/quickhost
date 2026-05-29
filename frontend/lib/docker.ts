@@ -34,7 +34,8 @@ export class DockerService {
     dockerfile: string = 'Dockerfile',
     buildArgs?: { [key: string]: string }
   ): Promise<string> {
-    let cmd = `docker build -t ${imageName} -f ${dockerfile}`;
+    const absoluteDockerfilePath = path.resolve(contextPath, dockerfile);
+    let cmd = `docker build -t ${imageName} -f "${absoluteDockerfilePath}"`;
 
     if (buildArgs) {
       for (const [key, value] of Object.entries(buildArgs)) {

@@ -19,7 +19,7 @@ export default async function handler(
       res.status(200).json(projects);
     } else if (req.method === 'POST') {
       // Create new project
-      const { name, gitUrl, gitBranch, subdomain, enableSsl, environmentVariables } = req.body;
+      const { name, gitUrl, gitBranch, subdomain, enableSsl, environmentVariables, testMode, dockerfilePath } = req.body;
 
       // Validation
       if (!name || !gitUrl || !subdomain) {
@@ -76,6 +76,8 @@ export default async function handler(
           subdomain,
           enableSsl: enableSsl !== false,
           environmentVariables: environmentVariables || {},
+          testMode: testMode === true,
+          dockerfilePath: dockerfilePath || 'Dockerfile',
         });
 
         res.status(201).json(project);

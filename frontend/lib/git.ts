@@ -109,8 +109,8 @@ export class GitService {
   /**
    * Check for available Dockerfile
    */
-  hasDockerfile(projectPath: string): boolean {
-    return fs.existsSync(path.join(projectPath, 'Dockerfile'));
+  hasDockerfile(projectPath: string, dockerfilePath: string = 'Dockerfile'): boolean {
+    return fs.existsSync(path.join(projectPath, dockerfilePath));
   }
 
   /**

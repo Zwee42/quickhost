@@ -10,6 +10,7 @@ interface Project {
   url: string;
   containerName: string;
   containerPort: number;
+  internalPort?: number;
   lastUpdated: string;
 }
 
@@ -103,6 +104,57 @@ export default function ProjectDetails() {
       fetchProject();
     } catch (err: any) {
       alert(`Failed to ${action} project: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleChangePort = async () => {
+    if (!id || !project) return;
+    
+    // First ask for the external port (Host port)
+    const newPortStr = window.prompt('Enter new HOST port number (1-65535).\nThis is the external port your site will run on:', project.containerPort.toString());
+    if (!newPortStr) return;
+    
+    const parsed = parseInt(newPortStr, 10);
+    if (isNaN(parsed) || parsed <= 0 || parsed > 65535) {
+      alert('Invalid port number. Please enter a number between 1 and 65535.');
+      return;
+    }
+
+    // Then ask for internal port (Container port)
+    const currentInternal = project.internalPort || project.containerPort;
+    const newInternalPortStr = window.prompt('Enter new CONTAINER port number (1-65535).\nThis is the port your application binds to internally:', currentInternal.toString());
+    let parsedInternal;
+
+    if (newInternalPortStr) {
+      parsedInternal = parseInt(newInternalPortStr, 10);
+      if (isNaN(parsedInternal) || parsedInternal <= 0 || parsedInternal > 65535) {
+        alert('Invalid internal port number. Please enter a number between 1 and 65535.');
+        return;
+      }
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          port: parsed,
+          internalPort: parsedInternal 
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update port');
+      }
+
+      fetchProject();
+      alert('Port mapping updated successfully.');
+    } catch (err: any) {
+      alert(`Failed to update port: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -207,8 +259,23 @@ export default function ProjectDetails() {
           </div>
 
           <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-            <p className="text-slate-400 text-sm mb-1">Port</p>
-            <p className="text-white text-lg font-semibold">{project.containerPort}</p>
+            <p className="text-slate-400 text-sm mb-1">Port Mapping</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-white text-lg font-semibold whitespace-nowrap">
+                  <span className="text-slate-400 text-xs uppercase tracking-wider mr-1">EXT</span>{project.containerPort} 
+                  <span className="text-slate-500 mx-1">→</span>
+                  <span className="text-slate-400 text-xs uppercase tracking-wider mr-1">INT</span>{project.internalPort || project.containerPort}
+                </p>
+              </div>
+              <button
+                onClick={handleChangePort}
+                disabled={actionLoading}
+                className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded disabled:opacity-50 transition ml-2"
+              >
+                Change
+              </button>
+            </div>
           </div>
 
           <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
